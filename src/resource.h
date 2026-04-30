@@ -4,8 +4,10 @@
 #include <optional>
 #include <utility>
 
-template <typename T, typename D>
-  requires std::invocable<D, T> && (!std::invocable<D, T&>)
+template <typename D, typename T>
+concept ResourceDeleter = std::invocable<D, T>;
+
+template <typename T, ResourceDeleter<T> D>
 class Resource {
  public:
   Resource(T value, D deleter)
