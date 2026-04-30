@@ -1,8 +1,28 @@
+#include <locale.h>
 #include <ncurses.h>
 
+#include <iostream>
+#include <print>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "src/defer.h"
+#include "src/resource.h"
+
+// -----------------------------------------------------------------------
+// Logo displayed at the top of the log
+// -----------------------------------------------------------------------
+// clang-format off
+const char* kLogo[] = {
+    " ███  ███           ",
+    "█   █  █    █    █  ",
+    "█████  █  ████ ████ ",
+    "█   █  █    █    █  ",
+    "█   █ ███           ",
+};
+// clang-format on
+constexpr int kLogoLines = 5;
 
 // -----------------------------------------------------------------------
 // Simple line editor state
@@ -11,31 +31,32 @@ struct LineBuf {
   std::string text;
   int cursor = 0;  // byte offset into text
 
-  void insert(char ch) {
+  void Insert(char ch) {
     text.insert(text.begin() + cursor, ch);
     ++cursor;
   }
-  void backspace() {
+  void Backspace() {
     if (cursor > 0) {
       text.erase(text.begin() + cursor - 1);
       --cursor;
     }
   }
-  void del() {
-    if (cursor < static_cast<int>(text.size()))
+  void Del() {
+    if (cursor < static_cast<int>(text.size())) {
       text.erase(text.begin() + cursor);
+    }
   }
-  void move_left() {
+  void MoveLeft() {
     if (cursor > 0) --cursor;
   }
-  void move_right() {
+  void MoveRight() {
     if (cursor < static_cast<int>(text.size())) ++cursor;
   }
-  void home() { cursor = 0; }
-  void end() { cursor = text.size(); }
+  void Home() { cursor = 0; }
+  void End() { cursor = static_cast<int>(text.size()); }
 
   // Return content and reset
-  std::string commit() {
+  std::string Commit() {
     std::string result = std::move(text);
     text.clear();
     cursor = 0;
@@ -50,16 +71,16 @@ struct Log {
   std::vector<std::string> lines;
   int scroll_offset = 0;
 
-  void append(const std::string& s) {
+  void Append(const std::string& s) {
     lines.push_back(s);
     // auto-scroll to bottom
     scroll_offset = 0;
   }
 
   // How many lines fit in the log window (height h)
-  int visible_lines(int h) const { return h; }
-  int total_scrollable() const {
-    int n = static_cast<int>(lines.size()) - visible_lines(0) + 1;
+  static int VisibleLines(int h) { return h; }
+  int TotalScrollable() const {
+    int n = static_cast<int>(lines.size()) - VisibleLines(0) + 1;
     return n > 0 ? n : 0;
   }
 };
@@ -67,23 +88,23 @@ struct Log {
 // -----------------------------------------------------------------------
 // Window refit helpers
 // -----------------------------------------------------------------------
-constexpr int INPUT_HEIGHT = 3;  // prompt line + edit line + status line
-constexpr int LOG_TOP = 0;
+constexpr int kInputHeight = 3;  // prompt line + edit line + status line
+constexpr int kLogTop = 0;
 
-static void refit_log_win(WINDOW* w, int rows, int cols) {
-  wresize(w, rows - INPUT_HEIGHT, cols);
-  mvwin(w, LOG_TOP, 0);
+static void RefitLogWin(WINDOW* w, int rows, int cols) {
+  wresize(w, rows - kInputHeight, cols);
+  mvwin(w, kLogTop, 0);
 }
 
-static void refit_input_win(WINDOW* w, int rows, int cols) {
-  wresize(w, INPUT_HEIGHT, cols);
-  mvwin(w, rows - INPUT_HEIGHT, 0);
+static void RefitInputWin(WINDOW* w, int rows, int cols) {
+  wresize(w, kInputHeight, cols);
+  mvwin(w, rows - kInputHeight, 0);
 }
 
 // -----------------------------------------------------------------------
 // Draw input line into the input window
 // -----------------------------------------------------------------------
-static void draw_input(WINDOW* win, const LineBuf& buf, int cols) {
+static void DrawInput(WINDOW* win, const LineBuf& buf, int cols) {
   werase(win);
 
   // prompt line
@@ -113,19 +134,44 @@ static void draw_input(WINDOW* win, const LineBuf& buf, int cols) {
 // -----------------------------------------------------------------------
 // Redraw the entire log window
 // -----------------------------------------------------------------------
-static void draw_log(WINDOW* win, const Log& log, int rows, int cols) {
+static void DrawLog(WINDOW* win, const Log& log, int rows, int cols) {
   werase(win);
-  int h = rows - INPUT_HEIGHT;
+  int h = rows - kInputHeight;
   int start = static_cast<int>(log.lines.size()) - h - log.scroll_offset;
   if (start < 0) start = 0;
   int y = 0;
-  for (int i = start; i < static_cast<int>(log.lines.size()) && y < h; ++i, ++y)
+  for (int i = start; i < static_cast<int>(log.lines.size()) && y < h;
+       ++i, ++y) {
     mvwaddnstr(win, y, 0, log.lines[i].c_str(), cols);
+  }
 }
 
 // =======================================================================
 int main() {
-  initscr();
+  if (setlocale(LC_ALL, "") == nullptr) {
+    std::println(std::cerr,
+                 "FATAL: setlocale() failed — check LANG/LC_ALL env vars");
+    return 1;
+  }
+
+  if (initscr() == nullptr) {
+    const char* term = getenv("TERM");
+    if (term != nullptr) {
+      std::println(std::cerr,
+                   "FATAL: initscr() failed — check TERM env var (got \"{}\")",
+                   term);
+    } else {
+      std::println(std::cerr, "FATAL: initscr() failed — TERM is not set");
+    }
+    return 1;
+  }
+
+  Defer endguard = {[]() noexcept {
+    if (endwin() == ERR) {
+      std::println(std::cerr, "endwin() failed");
+    }
+  }};
+
   cbreak();
   noecho();
   keypad(stdscr, TRUE);
@@ -141,20 +187,19 @@ int main() {
   getmaxyx(stdscr, rows, cols);
 
   // Create sub-windows
-  WINDOW* log_win = newwin(rows - INPUT_HEIGHT, cols, LOG_TOP, 0);
-  WINDOW* input_win = newwin(INPUT_HEIGHT, cols, rows - INPUT_HEIGHT, 0);
+  Resource log_win{newwin(rows - kInputHeight, cols, kLogTop, 0),
+                   [](WINDOW* w) noexcept { delwin(w); }};
+  Resource input_win{newwin(kInputHeight, cols, rows - kInputHeight, 0),
+                     [](WINDOW* w) noexcept { delwin(w); }};
   scrollok(log_win, TRUE);
   keypad(input_win, TRUE);
 
   LineBuf buf;
   Log log;
 
-  // Sample placeholder
-  log.append("  ___    |___  _/___________");
-  log.append("  __  /| |__  / ___/ /___/ /_");
-  log.append("  _  ___ |_/ /  /_  __/_  __/");
-  log.append("  /_/  |_/___/   /_/   /_/");
-  log.append("");
+  // Logo
+  for (int i = 0; i < kLogoLines; ++i) log.Append(kLogo[i]);
+  log.Append("");
 
   bool running = true;
 
@@ -170,14 +215,14 @@ int main() {
       cols = new_cols;
       endwin();
       refresh();  // re-read terminfo
-      refit_log_win(log_win, rows, cols);
-      refit_input_win(input_win, rows, cols);
+      RefitLogWin(log_win, rows, cols);
+      RefitInputWin(input_win, rows, cols);
       clearok(stdscr, TRUE);
     }
 
     // --- draw -----------------------------------------------------------
-    draw_log(log_win, log, rows, cols);
-    draw_input(input_win, buf, cols);
+    DrawLog(log_win, log, rows, cols);
+    DrawInput(input_win, buf, cols);
 
     wnoutrefresh(log_win);
     wnoutrefresh(input_win);
@@ -204,47 +249,44 @@ int main() {
 
       // Arrow keys (sent as KEY_ codes by keypad mode)
       case KEY_LEFT:
-        buf.move_left();
+        buf.MoveLeft();
         break;
       case KEY_RIGHT:
-        buf.move_right();
+        buf.MoveRight();
         break;
       case KEY_HOME:
-        buf.home();
+        buf.Home();
         break;
       case KEY_END:
-        buf.end();
+        buf.End();
         break;
       case KEY_BACKSPACE:
       case 127:
-        buf.backspace();
+        buf.Backspace();
         break;
 
       // Delete (some terminals send KEY_DC, others escape sequences)
       case KEY_DC:
-        buf.del();
+        buf.Del();
         break;
 
       // Enter
       case '\n':
       case '\r': {
-        std::string line = buf.commit();
+        std::string line = buf.Commit();
         if (line.empty()) break;
-        log.append("> " + line);
+        log.Append("> " + line);
         // TODO(aipp): send to AI
-        log.append("(AI response placeholder)");
+        log.Append("(AI response placeholder)");
         break;
       }
 
       // Printable characters
       default:
-        if (ch >= 32 && ch <= 126) buf.insert(static_cast<char>(ch));
+        if (ch >= 32 && ch <= 126) buf.Insert(static_cast<char>(ch));
         break;
     }
   }
 
-  delwin(log_win);
-  delwin(input_win);
-  endwin();
   return 0;
 }

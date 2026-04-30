@@ -10,6 +10,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(APPLE AND NOT CMAKE_OSX_SYSROOT)
+  execute_process(
+    COMMAND xcrun --show-sdk-path
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    OUTPUT_VARIABLE CMAKE_OSX_SYSROOT)
+endif()
 
 include(FetchContent)
 
@@ -34,12 +40,12 @@ if(BUILD_TESTING)
 
   add_executable(aipp_test src/main_test.cc)
   target_link_libraries(aipp_test PRIVATE GTest::gtest GTest::gtest_main)
-  target_include_directories(aipp_test PRIVATE src)
+  target_include_directories(aipp_test PRIVATE .)
   add_test(NAME aipp_test COMMAND aipp_test)
 endif()
 
 add_executable(aipp src/main.cc)
-target_include_directories(aipp PRIVATE src)
+target_include_directories(aipp PRIVATE .)
 target_link_libraries(aipp PRIVATE CLI11::CLI11 ${CURSES_LIBRARIES})
-target_include_directories(aipp PRIVATE ${CURSES_INCLUDE_DIR})
+target_include_directories(aipp PRIVATE ${CURSES_INCLUDE_PATH})
 target_compile_definitions(aipp PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
