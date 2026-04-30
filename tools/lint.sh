@@ -4,7 +4,7 @@ set -euo pipefail
 file="${1:?Usage: $0 <file.cc>}"
 
 echo "=== clang-tidy ==="
-clang-tidy -p build -fix "$file" 2>/dev/null  # suppress system header warning summary (stderr); user code diagnostics (stdout) unaffected
+clang-tidy -p build -fix "$file"
 
 echo "=== cpplint ==="
 cpplint "$file"
