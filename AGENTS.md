@@ -68,3 +68,74 @@ cmake --build build --clean-first
 ```
 
 > `CMakeLists.txt`를 변경한 경우 `cmake --build build`만으로 자동으로 reconfigure가 실행된다.
+
+---
+
+## 실험 및 검증 방법론
+
+### 1. TUI 프로그램은 tmux detached 세션에서 테스트한다
+
+```bash
+# 세션 생성
+tmux new-session -d -s tui_test
+
+# 프로그램 실행
+tmux send-keys -t tui_test './build/aipp' Enter
+
+# 키 입력 전송 (영어)
+tmux send-keys -t tui_test 'Hello'
+
+# 특수 키: Shift+Enter (CSI u 시퀀스는 한 번에 전송)
+tmux send-keys -t tui_test $'\x1B[27;2;13~'
+
+# 화면 캡처
+tmux capture-pane -t tui_test -p 2>/dev/null
+
+# 종료 후 정리
+tmux send-keys -t tui_test C-c   # Ctrl+C로 종료
+tmux kill-session -t tui_test     # 세션 제거
+```
+
+### 2. 문제 발생 시 최소 단위로 쪼개서 테스트한다 (이분법)
+
+1. **컴포넌트 단독 테스트**: Input 단독으로 먼저 동작 확인
+   ```cpp
+   screen.Loop(input);  // Container 없이 Input만
+   ```
+2. **Container 추가 시 문제**: 자식 순서 바꾸기, `SetActiveChild`로 포커스 강제 지정
+3. **Event 처리 문제**: CatchEvent 제거 후 순수 Container로 동작 확인
+
+반드시 **한 번에 하나씩만 변경**하고 매번 빌드 & 실행한다.
+
+### 3. 키 이벤트 분석은 print_key_press를 사용한다
+
+```bash
+# 빌드 (FTXUI_BUILD_EXAMPLES=ON 필요)
+cmake -B build -S . -DFTXUI_BUILD_EXAMPLES=ON
+cmake --build build --target ftxui_example_print_key_press
+
+# 실행 후 키 입력 → 좌측: ASCII 코드, 우측: 이벤트 이름
+./build/_deps/ftxui-build/examples/component/ftxui_example_print_key_press
+```
+
+터미널 환경마다 특수 키(Shift+Enter 등)의 이벤트 코드가 다르므로, **추정하지 말고 반드시 직접 측정**한다.
+
+### 4. 라이브러리 동작 확인은 소스 코드를 직접 읽는다
+
+```bash
+# Input 컴포넌트의 Enter 처리 확인
+rg "HandleReturn|multiline" build/_deps/ftxui-src/src/ftxui/component/input.cpp
+
+# 키 입력 파싱 확인
+cat build/_deps/ftxui-src/src/ftxui/component/terminal_input_parser.cpp
+```
+
+상상이나 추측으로 동작을 예측하지 말고, 실제 코드를 읽어서 확인한다.
+
+### 5. 검증 사이클
+
+```
+코드 수정 → clang-format / cmake-format → 빌드 → tmux 테스트 → 결과 확인
+```
+
+수정 후 반드시 포맷팅 → 빌드 → 실행 테스트까지 완료해야 한다. 화면 출력만 보고 "될 것이다"라고 추정하지 않는다.
