@@ -8,7 +8,6 @@ int main() {
   auto screen = ftxui::ScreenInteractive::Fullscreen();
 
   std::string input_content;
-  int cursor_line = 0;
 
   // 출력 영역 (로고 + AI 응답)
   auto output = ftxui::Renderer([] {
@@ -27,57 +26,52 @@ int main() {
   // 입력 영역
   ftxui::InputOption input_opt;
   input_opt.multiline = true;
-  input_opt.on_change = [&] {
-    int lines = 1;
-    for (char c : input_content)
-      if (c == '\n') lines++;
-    cursor_line = lines - 1;
+  input_opt.max_visible_lines = 11;
+  input_opt.transform = [](ftxui::InputState state) {
+    ftxui::Elements elems;
+
+    int above = state.scroll_offset;
+    int below = state.total_lines - state.scroll_offset - state.visible_lines;
+
+    // 위쪽 separator + indicator (dbox로 겹쳐서 수직선 없음)
+    if (above > 0) {
+      elems.push_back(ftxui::dbox({
+          ftxui::separator(),
+          ftxui::text("\u2500\u2500\u2500 \u2191 " + std::to_string(above) + " more \u2500\u2500\u2500"),
+      }));
+    } else {
+      elems.push_back(ftxui::separator());
+    }
+
+    elems.push_back(state.element);
+
+    // 아래쪽 separator + indicator (dbox로 겹쳐서 수직선 없음)
+    if (below > 0) {
+      elems.push_back(ftxui::dbox({
+          ftxui::separator(),
+          ftxui::text("\u2500\u2500\u2500 \u2193 " + std::to_string(below) + " more \u2500\u2500\u2500"),
+      }));
+    } else {
+      elems.push_back(ftxui::separator());
+    }
+
+    return ftxui::vbox(std::move(elems));
   };
-  auto input = ftxui::Input(&input_content, input_opt) |
-               ftxui::size(ftxui::HEIGHT, ftxui::GREATER_THAN, 1) |
-               ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 11);
+  auto input = ftxui::Input(&input_content, input_opt);
 
   // Footer
   auto footer = ftxui::Renderer([] {
-    return ftxui::hbox({
-        ftxui::text(" aipp "),
-        ftxui::separator(),
-        ftxui::text(" AI++ "),
-        ftxui::filler(),
-        ftxui::text(" Enter: send | Shift+Enter: newline "),
-    });
+    return ftxui::text(" aipp | AI++    Enter: send | Shift+Enter: newline ");
   });
 
   // 전체 뷰 (Container 없이 직접 조합)
+  // Input의 transform이 위/아래 separator를 포함하므로 별도 separator 불필요.
   auto view = ftxui::Renderer([&] {
-    int total = 1;
-    for (char c : input_content)
-      if (c == '\n') total++;
-
-    ftxui::Elements elems;
-    elems.push_back(output->Render());
-
-    elems.push_back(ftxui::separator());
-
-    // 스크롤 인디케이터 (위)
-    if (cursor_line > 0) {
-      elems.push_back(
-          ftxui::text("  \u2191 " + std::to_string(cursor_line) + " more "));
-    }
-
-    elems.push_back(input->Render());
-
-    // 스크롤 인디케이터 (아래)
-    int after = total - cursor_line - 1;
-    if (after > 0) {
-      elems.push_back(
-          ftxui::text("  \u2193 " + std::to_string(after) + " more "));
-    }
-
-    elems.push_back(ftxui::separator());
-    elems.push_back(footer->Render());
-
-    return ftxui::vbox(elems);
+    return ftxui::vbox({
+        output->Render(),
+        input->Render(),
+        footer->Render(),
+    });
   });
 
   // 키 이벤트
@@ -94,20 +88,10 @@ int main() {
       screen.PostEvent(ftxui::Event::End);
       return true;
     }
-    if (event == ftxui::Event::ArrowUp) {
-      if (cursor_line > 0) cursor_line--;
-      return input->OnEvent(event);
-    }
-    if (event == ftxui::Event::ArrowDown) {
-      int total = 1;
-      for (char c : input_content)
-        if (c == '\n') total++;
-      if (cursor_line + 1 < total) cursor_line++;
-      return input->OnEvent(event);
-    }
     return input->OnEvent(event);
   });
 
+  screen.TrackMouse(false);
   screen.Loop(view);
   return 0;
 }
