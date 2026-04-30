@@ -142,3 +142,35 @@ cat build/_deps/ftxui-src/src/ftxui/component/terminal_input_parser.cpp
 ```
 
 수정 후 반드시 포맷팅 → 빌드 → 실행 테스트까지 완료해야 한다. 화면 출력만 보고 "될 것이다"라고 추정하지 않는다.
+
+### 6. 회귀 테스트는 GTest + CTest로 작성한다
+
+**테스트 추가:**
+
+1. `tests/main_test.cpp`에 GTest 테스트를 추가한다.
+   ```cpp
+   #include <gtest/gtest.h>
+   #include "some_header.h"
+
+   TEST(ComponentName, BehaviorName) {
+     EXPECT_EQ(actual, expected);
+   }
+   ```
+
+2. 새 테스트 파일이 필요하면 `tests/CMakeLists.txt`에 `add_executable`을 추가하고 `add_test()`로 등록한다.
+
+**테스트 실행:**
+
+```bash
+# Configure & Build (BUILD_TESTING=ON 필수)
+cmake -B build -S . -DBUILD_TESTING=ON
+cmake --build build --target aipp_test
+
+# CTest 실행
+ctest --test-dir build -V
+
+# 특정 테스트만 실행
+./build/tests/aipp_test --gtest_filter='Sanity.*'
+```
+
+기본 빌드(`BUILD_TESTING=OFF`)에서는 GTest가 Fetch되지 않아 빌드 시간에 영향이 없다.
