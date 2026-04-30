@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "src/defer.h"
 #include "src/resource.h"
 
 // -----------------------------------------------------------------------
@@ -91,14 +90,14 @@ struct Log {
 constexpr int kInputHeight = 3;  // prompt line + edit line + status line
 constexpr int kLogTop = 0;
 
-static void RefitLogWin(WINDOW* w, int rows, int cols) {
-  wresize(w, rows - kInputHeight, cols);
+static void RefitLogWin(WINDOW* w, int max_y, int cols) {
+  wresize(w, max_y - kInputHeight, cols);
   mvwin(w, kLogTop, 0);
 }
 
-static void RefitInputWin(WINDOW* w, int rows, int cols) {
+static void RefitInputWin(WINDOW* w, int max_y, int cols) {
   wresize(w, kInputHeight, cols);
-  mvwin(w, rows - kInputHeight, 0);
+  mvwin(w, max_y - kInputHeight, 0);
 }
 
 // -----------------------------------------------------------------------
@@ -134,9 +133,9 @@ static void DrawInput(WINDOW* win, const LineBuf& buf, int cols) {
 // -----------------------------------------------------------------------
 // Redraw the entire log window
 // -----------------------------------------------------------------------
-static void DrawLog(WINDOW* win, const Log& log, int rows, int cols) {
+static void DrawLog(WINDOW* win, const Log& log, int max_y, int cols) {
   werase(win);
-  int h = rows - kInputHeight;
+  int h = max_y - kInputHeight;
   int start = static_cast<int>(log.lines.size()) - h - log.scroll_offset;
   if (start < 0) start = 0;
   int y = 0;
@@ -166,29 +165,52 @@ int main() {
     return 1;
   }
 
-  Defer endguard = {[]() noexcept {
+  auto _defer_endwin = Resource(nullptr, [](auto) noexcept {
     if (endwin() == ERR) {
-      std::println(std::cerr, "endwin() failed");
+      std::println(std::cerr,
+                   "WARN: endwin() returned ERR (shutdown continues)");
     }
-  }};
+  });
 
-  cbreak();
-  noecho();
-  keypad(stdscr, TRUE);
-  curs_set(1);  // visible cursor
-
-  // Colour support
-  if (has_colors()) {
-    start_color();
-    use_default_colors();
+  if (cbreak() == ERR) {
+    std::println(std::cerr, "FATAL: cbreak() failed");
+    return 1;
   }
 
-  int rows, cols;
-  getmaxyx(stdscr, rows, cols);
+  if (noecho() == ERR) {
+    std::println(std::cerr, "FATAL: noecho() failed");
+    return 1;
+  }
 
-  // Create sub-windows
-  WINDOW* log_win = newwin(rows - kInputHeight, cols, kLogTop, 0);
-  WINDOW* input_win = newwin(kInputHeight, cols, rows - kInputHeight, 0);
+  if (keypad(stdscr, TRUE) == ERR) {
+    std::println(std::cerr, "FATAL: keypad() failed");
+    return 1;
+  }
+
+  if (curs_set(1) == ERR) {
+    std::println(
+        std::cerr,
+        "FATAL: curs_set(1) failed — terminal may not support visible cursor");
+    return 1;
+  }
+
+  if (has_colors()) {
+    if (start_color() == ERR) {
+      std::println(std::cerr, "FATAL: start_color() failed");
+      return 1;
+    }
+
+    if (use_default_colors() == ERR) {
+      std::println(std::cerr, "FATAL: use_default_colors() failed");
+      return 1;
+    }
+  }
+
+  int max_y, max_x;
+  getmaxyx(stdscr, max_y, max_x);
+
+  WINDOW* log_win = newwin(max_y - kInputHeight, max_x, kLogTop, 0);
+  WINDOW* input_win = newwin(kInputHeight, max_x, max_y - kInputHeight, 0);
   Defer del_log_win{[log_win]() noexcept { delwin(log_win); }};
   Defer del_input_win{[input_win]() noexcept { delwin(input_win); }};
   scrollok(log_win, TRUE);
@@ -210,19 +232,19 @@ int main() {
     // --- resize check ---------------------------------------------------
     int new_rows, new_cols;
     getmaxyx(stdscr, new_rows, new_cols);
-    if (new_rows != rows || new_cols != cols) {
-      rows = new_rows;
-      cols = new_cols;
+    if (new_rows != max_y || new_cols != max_x) {
+      max_y = new_rows;
+      max_x = new_cols;
       endwin();
       refresh();  // re-read terminfo
-      RefitLogWin(log_win, rows, cols);
-      RefitInputWin(input_win, rows, cols);
+      RefitLogWin(log_win, max_y, max_x);
+      RefitInputWin(input_win, max_y, max_x);
       clearok(stdscr, TRUE);
     }
 
     // --- draw -----------------------------------------------------------
-    DrawLog(log_win, log, rows, cols);
-    DrawInput(input_win, buf, cols);
+    DrawLog(log_win, log, max_y, max_x);
+    DrawInput(input_win, buf, max_x);
 
     wnoutrefresh(log_win);
     wnoutrefresh(input_win);
