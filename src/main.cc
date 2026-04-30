@@ -187,6 +187,11 @@ int main() {
     return 1;
   }
 
+  if (nodelay(stdscr, TRUE) == ERR) {
+    std::println(std::cerr, "FATAL: nodelay() failed");
+    return 1;
+  }
+
   if (curs_set(1) == ERR) {
     std::println(
         std::cerr,
@@ -209,106 +214,110 @@ int main() {
   int max_y, max_x;
   getmaxyx(stdscr, max_y, max_x);
 
-  WINDOW* log_win = newwin(max_y - kInputHeight, max_x, kLogTop, 0);
-  WINDOW* input_win = newwin(kInputHeight, max_x, max_y - kInputHeight, 0);
-  Defer del_log_win{[log_win]() noexcept { delwin(log_win); }};
-  Defer del_input_win{[input_win]() noexcept { delwin(input_win); }};
-  scrollok(log_win, TRUE);
-  keypad(input_win, TRUE);
-
-  LineBuf buf;
-  Log log;
-
-  // Logo
-  for (int i = 0; i < kLogoLines; ++i) log.Append(k_logo[i]);
-  log.Append("");
-
   bool running = true;
-
-  // Handle terminal resize
-  signal(SIGWINCH, SIG_IGN);  // we'll check size manually in the loop
-
   while (running) {
-    // --- resize check ---------------------------------------------------
-    int new_rows, new_cols;
-    getmaxyx(stdscr, new_rows, new_cols);
-    if (new_rows != max_y || new_cols != max_x) {
-      max_y = new_rows;
-      max_x = new_cols;
-      endwin();
-      refresh();  // re-read terminfo
-      RefitLogWin(log_win, max_y, max_x);
-      RefitInputWin(input_win, max_y, max_x);
-      clearok(stdscr, TRUE);
-    }
-
-    // --- draw -----------------------------------------------------------
-    DrawLog(log_win, log, max_y, max_x);
-    DrawInput(input_win, buf, max_x);
-
-    wnoutrefresh(log_win);
-    wnoutrefresh(input_win);
-    doupdate();
-
-    // --- input ----------------------------------------------------------
-    int ch = wgetch(input_win);
-    switch (ch) {
-      case ERR:
-        break;
-      case 27: {  // ESC
-        // Check for escape sequences (ALT+key, arrow keys with meta, etc.)
-        nodelay(input_win, TRUE);
-        int next = wgetch(input_win);
-        nodelay(input_win, FALSE);
-        if (next == ERR) {
-          running = false;  // bare ESC → quit
-        } else {
-          // It's an escape sequence; push back via ungetch
-          ungetch(next);
-        }
-        break;
-      }
-
-      // Arrow keys (sent as KEY_ codes by keypad mode)
-      case KEY_LEFT:
-        buf.MoveLeft();
-        break;
-      case KEY_RIGHT:
-        buf.MoveRight();
-        break;
-      case KEY_HOME:
-        buf.Home();
-        break;
-      case KEY_END:
-        buf.End();
-        break;
-      case KEY_BACKSPACE:
-      case 127:
-        buf.Backspace();
-        break;
-
-      // Delete (some terminals send KEY_DC, others escape sequences)
-      case KEY_DC:
-        buf.Del();
-        break;
-
-      // Enter
-      case '\n':
-      case '\r': {
-        std::string line = buf.Commit();
-        if (line.empty()) break;
-        log.Append("> " + line);
-        // TODO(aipp): send to AI
-        log.Append("(AI response placeholder)");
-        break;
-      }
-
-      // Printable characters
-      default:
-        if (ch >= 32 && ch <= 126) buf.Insert(static_cast<char>(ch));
-        break;
-    }
   }
+
+  // WINDOW* log_win = newwin(max_y - kInputHeight, max_x, kLogTop, 0);
+  // WINDOW* input_win = newwin(kInputHeight, max_x, max_y - kInputHeight, 0);
+  // Defer del_log_win{[log_win]() noexcept { delwin(log_win); }};
+  // Defer del_input_win{[input_win]() noexcept { delwin(input_win); }};
+  // scrollok(log_win, TRUE);
+  // keypad(input_win, TRUE);
+
+  // LineBuf buf;
+  // Log log;
+
+  // // Logo
+  // for (int i = 0; i < kLogoLines; ++i) log.Append(k_logo[i]);
+  // log.Append("");
+
+  // bool running = true;
+
+  // // Handle terminal resize
+  // signal(SIGWINCH, SIG_IGN);  // we'll check size manually in the loop
+
+  // while (running) {
+  //   // --- resize check ---------------------------------------------------
+  //   int new_rows, new_cols;
+  //   getmaxyx(stdscr, new_rows, new_cols);
+  //   if (new_rows != max_y || new_cols != max_x) {
+  //     max_y = new_rows;
+  //     max_x = new_cols;
+  //     endwin();
+  //     refresh();  // re-read terminfo
+  //     RefitLogWin(log_win, max_y, max_x);
+  //     RefitInputWin(input_win, max_y, max_x);
+  //     clearok(stdscr, TRUE);
+  //   }
+
+  //   // --- draw -----------------------------------------------------------
+  //   DrawLog(log_win, log, max_y, max_x);
+  //   DrawInput(input_win, buf, max_x);
+
+  //   wnoutrefresh(log_win);
+  //   wnoutrefresh(input_win);
+  //   doupdate();
+
+  //   // --- input ----------------------------------------------------------
+  //   int ch = wgetch(input_win);
+  //   switch (ch) {
+  //     case ERR:
+  //       break;
+  //     case 27: {  // ESC
+  //       // Check for escape sequences (ALT+key, arrow keys with meta, etc.)
+  //       nodelay(input_win, TRUE);
+  //       int next = wgetch(input_win);
+  //       nodelay(input_win, FALSE);
+  //       if (next == ERR) {
+  //         running = false;  // bare ESC → quit
+  //       } else {
+  //         // It's an escape sequence; push back via ungetch
+  //         ungetch(next);
+  //       }
+  //       break;
+  //     }
+
+  //     // Arrow keys (sent as KEY_ codes by keypad mode)
+  //     case KEY_LEFT:
+  //       buf.MoveLeft();
+  //       break;
+  //     case KEY_RIGHT:
+  //       buf.MoveRight();
+  //       break;
+  //     case KEY_HOME:
+  //       buf.Home();
+  //       break;
+  //     case KEY_END:
+  //       buf.End();
+  //       break;
+  //     case KEY_BACKSPACE:
+  //     case 127:
+  //       buf.Backspace();
+  //       break;
+
+  //     // Delete (some terminals send KEY_DC, others escape sequences)
+  //     case KEY_DC:
+  //       buf.Del();
+  //       break;
+
+  //     // Enter
+  //     case '\n':
+  //     case '\r': {
+  //       std::string line = buf.Commit();
+  //       if (line.empty()) break;
+  //       log.Append("> " + line);
+  //       // TODO(aipp): send to AI
+  //       log.Append("(AI response placeholder)");
+  //       break;
+  //     }
+
+  //     // Printable characters
+  //     default:
+  //       if (ch >= 32 && ch <= 126) buf.Insert(static_cast<char>(ch));
+  //       break;
+  //   }
+  // }
 
   return 0;
 }
