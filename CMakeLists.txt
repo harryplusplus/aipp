@@ -35,10 +35,14 @@ if(BUILD_TESTING)
   FetchContent_MakeAvailable(googletest)
 
   enable_testing()
-  add_subdirectory(tests)
+
+  add_executable(aipp_test src/main_test.cc)
+  target_link_libraries(aipp_test PRIVATE GTest::gtest GTest::gtest_main)
+  target_include_directories(aipp_test PRIVATE src)
+  add_test(NAME aipp_test COMMAND aipp_test)
 endif()
 
-add_executable(aipp src/main.cpp)
+add_executable(aipp src/main.cc)
 target_include_directories(aipp PRIVATE src)
 target_link_libraries(aipp PRIVATE CLI11::CLI11 ftxui::component)
 target_compile_definitions(aipp PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
