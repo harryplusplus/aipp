@@ -12,17 +12,17 @@ int main() {
   \___/ \___/
    ++   ++
 )";
-  auto component = Renderer([&] {
-    using namespace ftxui;
-    return vbox({
-        text("   ___   ___"),
-        text("  / _ \\ / _ \\"),
-        text(" | (_) | (_) |"),
-        text("  \\___/ \\___/"),
-        text("   ++   ++")
+  auto component = ftxui::Renderer([&] {
+    
+    return ftxui::vbox({
+        ftxui::text("   ___   ___"),
+        ftxui::text("  / _ \\ / _ \\"),
+        ftxui::text(" | (_) | (_) |"),
+        ftxui::text("  \\___/ \\___/"),
+        ftxui::text("   ++   ++")
     });
 });
-  auto screen = ScreenInteractive::Fullscreen();
+  auto screen = ftxui::ScreenInteractive::Fullscreen();
   screen.Loop(component);
   return 0;
 }
