@@ -19,7 +19,7 @@ FetchContent_Declare(
   GIT_TAG v2.6.2)
 FetchContent_MakeAvailable(cli11)
 
-add_subdirectory(external/FTXUI)
+find_package(Curses REQUIRED)
 
 include(CTest)
 
@@ -40,5 +40,6 @@ endif()
 
 add_executable(aipp src/main.cc)
 target_include_directories(aipp PRIVATE src)
-target_link_libraries(aipp PRIVATE CLI11::CLI11 ftxui::component)
+target_link_libraries(aipp PRIVATE CLI11::CLI11 ${CURSES_LIBRARIES})
+target_include_directories(aipp PRIVATE ${CURSES_INCLUDE_DIR})
 target_compile_definitions(aipp PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
