@@ -5,40 +5,26 @@
 #include <memory>
 #include <utility>
 
-// --- Helper: checks whether Resource<T, D> can be instantiated ---
 template <typename T, typename D, typename = void>
 struct ResourceValid : std::false_type {};
 template <typename T, typename D>
 struct ResourceValid<T, D, std::void_t<decltype(sizeof(Resource<T, D>))>>
     : std::true_type {};
 
-// ============================================================
-// ResourceDeleter concept — verified against all T categories
-// ============================================================
-
-// --- ResourceDeleter: valid ---
 static_assert(ResourceDeleter<void (*)(int), int>);
 static_assert(ResourceDeleter<void (*)(int&&), int>);
 static_assert(ResourceDeleter<void (*)(const int&), int>);
 
-// --- ResourceDeleter: invalid ---
-static_assert(!ResourceDeleter<void (*)(int&), int>);  // lvalue ref
-static_assert(!ResourceDeleter<int, int>);             // not callable
+static_assert(!ResourceDeleter<void (*)(int&), int>);
+static_assert(!ResourceDeleter<int, int>);
 
-// ============================================================
-// Valid Resource instantiations — enumerated by T category
-// ============================================================
-
-// --- int (scalar) ---
 static_assert(ResourceValid<int, void (*)(int)>::value);
 static_assert(ResourceValid<int, void (*)(int&&)>::value);
 static_assert(ResourceValid<int, void (*)(const int&)>::value);
 
-// --- int* (pointer) ---
 static_assert(ResourceValid<int*, void (*)(int*)>::value);
 static_assert(ResourceValid<int*, void (*)(int*&&)>::value);
 
-// --- unique_ptr<int> (move-only object) ---
 static_assert(
     ResourceValid<std::unique_ptr<int>, void (*)(std::unique_ptr<int>)>::value);
 static_assert(ResourceValid<std::unique_ptr<int>,
@@ -46,19 +32,11 @@ static_assert(ResourceValid<std::unique_ptr<int>,
 static_assert(ResourceValid<std::unique_ptr<int>,
                             void (*)(const std::unique_ptr<int>&)>::value);
 
-// ============================================================
-// Invalid Resource instantiations
-// ============================================================
-
 static_assert(!ResourceValid<int, void (*)(int&)>::value);
 static_assert(!ResourceValid<int, int>::value);
 
 struct NotInvocable {};
 static_assert(!ResourceValid<int, NotInvocable>::value);
-
-// ============================================================
-// Move-only object T (anonymous namespace helpers)
-// ============================================================
 
 namespace {
 
@@ -90,22 +68,13 @@ struct FileDesc {
   explicit FileDesc(int f) : fd(f) {}
 };
 
-// --- MoveOnlyInt: valid instantiations ---
-static_assert(
-    ResourceValid<MoveOnlyInt, void (*)(MoveOnlyInt)>::value);  // void(T)
-static_assert(
-    ResourceValid<MoveOnlyInt, void (*)(MoveOnlyInt&&)>::value);  // void(T&&)
+static_assert(ResourceValid<MoveOnlyInt, void (*)(MoveOnlyInt)>::value);
+static_assert(ResourceValid<MoveOnlyInt, void (*)(MoveOnlyInt&&)>::value);
 static_assert(ResourceValid<MoveOnlyInt, void (*)(const MoveOnlyInt&)>::value);
 
-// --- MoveOnlyInt: invalid ---
-static_assert(
-    !ResourceValid<MoveOnlyInt, void (*)(MoveOnlyInt&)>::value);  // void(T&)
+static_assert(!ResourceValid<MoveOnlyInt, void (*)(MoveOnlyInt&)>::value);
 
 }  // namespace
-
-// ============================================================
-// Runtime behavior tests
-// ============================================================
 
 TEST(ResourceTest, MoveConstruct) {
   int delete_count = 0;

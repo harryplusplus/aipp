@@ -12,9 +12,6 @@ class Resource {
  public:
   Resource(T value, D deleter)
       : value_(std::move(value)), deleter_(std::move(deleter)) {}
-  ~Resource() {
-    if (HasValue()) deleter_(std::move(*value_));
-  }
 
   Resource(Resource&& other) noexcept
       : value_(std::exchange(other.value_, std::nullopt)),
@@ -29,6 +26,10 @@ class Resource {
 
   Resource(const Resource&) = delete;
   Resource& operator=(const Resource&) = delete;
+
+  ~Resource() {
+    if (HasValue()) deleter_(std::move(*value_));
+  }
 
   T& Get() { return *value_; }
   const T& Get() const { return *value_; }
