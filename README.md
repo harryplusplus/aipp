@@ -16,3 +16,5 @@ git submodule update --init --recursive
 - `ninja` — build tool
 - `cmake-format` — CMakeLists.txt formatter
 - `clang-format` — C++ code formatter
+- `cpplint` — C++ style checker (Google C++ Style Guide)
+- `clang-tidy` — C++ static analysis & linting

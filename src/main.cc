@@ -1,6 +1,7 @@
 #include <ncurses.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 // -----------------------------------------------------------------------
@@ -230,7 +231,7 @@ int main() {
         std::string line = buf.commit();
         if (line.empty()) break;
         log.append("> " + line);
-        // TODO: send to AI
+        // TODO(aipp): send to AI
         log.append("(AI response placeholder)");
         break;
       }

@@ -4,191 +4,146 @@
 
 | 문서 | 대상 | 내용 |
 |---|---|---|
-| `README.md` | **사용자** | 프로젝트 개요, 설치, 사용법, 필수 도구 목록 |
-| `AGENTS.md` | **AI 에이전트** | 코딩 규칙, 포맷팅, 빌드, 테스트, 실험 방법론 등 개발 상세 |
+| `README.md` | **사용자** | 프로젝트 개요, 설치, 사용법 |
+| `AGENTS.md` | **AI 에이전트** | 개발 규칙, 도구 사용법, 실험 방법론 |
 
-- AI 에이전트는 **먼저 `README.md`를 읽고**, 그다음 이 파일(`AGENTS.md`)을 따라 작업한다.
-- 개발 관련 세부 사항은 모두 `AGENTS.md`에만 기록하고, `README.md`는 사용자 수준으로 유지한다.
+- AI 에이전트는 **먼저 `README.md`를 읽고**, 그다음 이 파일을 따라 작업한다.
+- 개발 상세는 이 파일에만 기록하고, `README.md`는 사용자 수준으로 유지한다.
+- 이 파일은 **AI 에이전트의 행동 지침**이다. 모든 내용은 "무엇을 할지", "왜 해야 하는지", "어떻게 할지"로 구성한다.
+- 정보를 나열하지 말고, **파일 위치**를 명시하여 에이전트가 직접 읽게 한다.
 
 ---
-
-> **시작하기 전에 `README.md`를 먼저 읽어서 프로젝트 개요와 개발 환경을 숙지하시오.**
 
 ## 일반 원칙
 
-- **주석은 꼭 필요한 경우에만 작성한다.** 코드만으로 의도가 명확히 드러난다면 주석을 달지 않는다.
-- 주석이 필요할 때는 **무엇(what)이 아니라 왜(why)와 어떻게(how)**를 설명한다.
-- **Google C++ 스타일 가이드**(`external/styleguide/cppguide.html`)를 준수한다.
-- **한국어를 포함한 모든 UTF-8 입력을 지원한다.** FTXUI가 UTF-8을 정상 처리하므로, IME 입력이 안 된다면 터미널/환경 문제로 간주하고 이슈로 남긴다.
+- **주석은 꼭 필요한 경우에만.** 코드만으로 의도가 명확하면 달지 않는다. 주석이 필요하면 **무엇(what)이 아니라 왜(why)와 어떻게(how)**를 설명한다.
+- **Google C++ 스타일 가이드**(`external/styleguide/cppguide.html`)를 준수한다. 소스는 `.cc`, 헤더는 `.h`만 사용한다.
 
-### rg 사용 규칙
+## rg 사용법 — 반드시 숙지할 것
 
-`rg`는 Rust 정규식을 사용한다. **`|`는 OR 연산자이므로 escape하면 안 된다.** literal `|`를 찾으려면 `[|]`를 쓴다.
-- `rg "foo|bar"` → `foo` 또는 `bar` 검색
-- `rg "foo[|]bar"` → `foo|bar` 문자열 검색
+`rg`는 **Rust 정규식**을 사용한다. **`|`는 OR 연산자이므로 절대 escape하지 않는다.**
 
----
-
-## C++ 파일 작업 후
-- `clang-format`을 실행하여 코드 스타일을 정리한다.
-
-### 예제
-
-**예제 1:** `src/core/processor.cc` 수정 후
-```
-# 수정 완료 → clang-format 실행
-clang-format -i src/core/processor.cc
+```bash
+# OR 검색
+rg "foo|bar"          # foo 또는 bar 검색 (정상)
+rg "foo\|bar"         # literal "foo|bar" 검색 — 의도한 OR가 아님! (오류)
+rg "foo[|]bar"        # literal "foo|bar" 검색 (정상, 문자 클래스 사용)
 ```
 
-**예제 2:** `include/aipp/types.h` 수정 후
-```
-# 헤더 파일도 동일하게 적용
-clang-format -i include/aipp/types.h
+| 패턴 | 결과 |
+|---|---|
+| `"foo|bar"` | `foo` 또는 `bar` (OR) |
+| `"foo\|bar"` | literal `foo|bar` (의도한 OR가 아님) |
+| `"foo[|]bar"` | literal `foo|bar` (권장) |
+
+**기억할 것:** `rg`에서는 `|`를 절대 escape하지 않는다. Escape하면 literal pipe가 된다.
+
+## 빌드
+
+```bash
+cmake -B build -S .
+cmake --build build
+cmake --build build --clean-first   # clean rebuild
 ```
 
-**예제 3:** 여러 파일을 동시에 수정한 경우
+`CMakeLists.txt`를 변경해도 `cmake --build build`만으로 자동 reconfigure된다.
+
+## C++ 코드 변경 후
+
+변경이 끝나면 반드시 아래 세 단계를 순서대로 실행한다.
+
+```bash
+# 1. 포맷팅
+clang-format -i src/main.cc
+
+# 2. 스타일 검사
+cpplint src/main.cc
+
+# 3. 정적 분석
+clang-tidy -p build src/main.cc
+clang-tidy -p build -fix src/main.cc   # 자동 수정
 ```
-# 와일드카드로 한 번에 정리
-clang-format -i src/**/*.cc include/**/*.h
+
+와일드카드로 한 번에 처리:
+```bash
+clang-format -i src/**/*.cc src/**/*.h
+find src -name '*.cc' -o -name '*.h' | xargs clang-tidy -p build
 ```
 
----
+`clang-tidy -p build`는 `build/compile_commands.json`을 읽어 include 경로와 컴파일 플래그를 파악한다. `CMAKE_EXPORT_COMPILE_COMMANDS ON`이 설정되어 있어 자동 생성된다.
 
-## CMakeLists.txt 파일 작업 후
-- `cmake-format`을 실행하여 파일을 정리한다.
+## CMakeLists.txt 변경 후
 
-### 예제
-
-**예제 1:** 최상위 `CMakeLists.txt` 수정 후
-```
+```bash
 cmake-format -i CMakeLists.txt
 ```
 
-**예제 2:** 서브 디렉터리 `CMakeLists.txt` 수정 후
-```
-cmake-format -i src/CMakeLists.txt tests/CMakeLists.txt
-```
+## 테스트 (GTest + CTest)
 
-**예제 3:** 새 타겟 추가 등 주요 변경 후
-```
-# 모든 CMakeLists.txt를 한 번에 정리
-find . -name CMakeLists.txt -exec cmake-format -i {} +
+**테스트 실행 (전체):**
+```bash
+cmake -B build -S . -DBUILD_TESTING=ON
+cmake --build build --target aipp_test
+ctest --test-dir build -V
 ```
 
-## CMake 빌드
-
-```
-# Configure (초기 설정, build 디렉토리가 없거나 CMakeLists.txt 변경 시)
-cmake -B build -S .
-
-# Build
-cmake --build build
-
-# Clean & rebuild
-cmake --build build --clean-first
+**특정 테스트만 실행:**
+```bash
+./build/aipp_test --gtest_filter='Sanity.*'
 ```
 
-> `CMakeLists.txt`를 변경한 경우 `cmake --build build`만으로 자동으로 reconfigure가 실행된다.
+> `--gtest_filter='Sanity.*'`의 싱글쿼트는 `*`가 쉘에서 확장되지 않도록 보호한다. 반드시 붙일 것.
+
+**추가:** `src/` 아래에 `.cc` 파일로 새 테스트를 만들고, `CMakeLists.txt`에 `add_executable` / `add_test()`를 등록한다.
 
 ---
 
 ## 실험 및 검증 방법론
 
-### 1. TUI 프로그램은 tmux detached 세션에서 테스트한다
+### 검증 사이클
+
+```
+코드 수정 → 포맷팅/분석 → 빌드 → 실행 테스트 → 결과 확인
+```
+
+수정 후 반드시 포맷팅 → 빌드 → 실행까지 완료한다. "될 것이다"라고 추정하지 않는다.
+
+### TUI 테스트 (tmux detached)
 
 ```bash
-# 세션 생성
 tmux new-session -d -s tui_test
-
-# 프로그램 실행
 tmux send-keys -t tui_test './build/aipp' Enter
-
-# 키 입력 전송 (영어)
 tmux send-keys -t tui_test 'Hello'
-
-# 특수 키: Shift+Enter (CSI u 시퀀스는 한 번에 전송)
-tmux send-keys -t tui_test $'\x1B[27;2;13~'
-
-# 화면 캡처
-tmux capture-pane -t tui_test -p 2>/dev/null
-
-# 종료 후 정리
-tmux send-keys -t tui_test C-c   # Ctrl+C로 종료
-tmux kill-session -t tui_test     # 세션 제거
+tmux send-keys -t tui_test $'\x1B[27;2;13~'   # Shift+Enter (CSI u)
+tmux capture-pane -t tui_test -p
+tmux send-keys -t tui_test C-c
+tmux kill-session -t tui_test
 ```
 
-### 2. 문제 발생 시 최소 단위로 쪼개서 테스트한다 (이분법)
+### 문제 발생 시 — 최소 단위로 분할 (이분법)
 
-1. **컴포넌트 단독 테스트**: Input 단독으로 먼저 동작 확인
-   ```cpp
-   screen.Loop(input);  // Container 없이 Input만
-   ```
-2. **Container 추가 시 문제**: 자식 순서 바꾸기, `SetActiveChild`로 포커스 강제 지정
-3. **Event 처리 문제**: CatchEvent 제거 후 순수 Container로 동작 확인
+1. 가장 단순한 입력/출력부터 동작 확인
+2. 문제가 되는 부분을 절반으로 나눠 어느 쪽이 문제인지 좁힘
+3. 원인으로 의심되는 부분을 격리해서 단독 테스트
 
-반드시 **한 번에 하나씩만 변경**하고 매번 빌드 & 실행한다.
+**한 번에 하나씩만 변경**하고 매번 빌드 & 실행한다.
 
-### 3. 키 이벤트 분석은 print_key_press를 사용한다
+### 키 이벤트 확인
+
+터미널 환경마다 특수 키가 보내는 시퀀스가 다르다. **추정하지 말고 직접 측정**한다.
 
 ```bash
-# 빌드 (FTXUI_BUILD_EXAMPLES=ON 필요)
-cmake -B build -S . -DFTXUI_BUILD_EXAMPLES=ON
-cmake --build build --target ftxui_example_print_key_press
-
-# 실행 후 키 입력 → 좌측: ASCII 코드, 우측: 이벤트 이름
-./build/_deps/ftxui-build/examples/component/ftxui_example_print_key_press
+# 키 입력의 원시 시퀀스 확인
+od -c                     # 입력 후 Ctrl+D로 종료
+# 또는
+cat -v                    # 입력 후 Ctrl+D로 종료
 ```
 
-터미널 환경마다 특수 키(Shift+Enter 등)의 이벤트 코드가 다르므로, **추정하지 말고 반드시 직접 측정**한다.
+### 라이브러리 동작 확인
 
-### 4. 라이브러리 동작 확인은 소스 코드를 직접 읽는다
+소스 코드를 직접 읽는다. 추측 금지.
 
 ```bash
-# Input 컴포넌트의 Enter 처리 확인
-rg "HandleReturn|multiline" build/_deps/ftxui-src/src/ftxui/component/input.cpp
-
-# 키 입력 파싱 확인
-cat build/_deps/ftxui-src/src/ftxui/component/terminal_input_parser.cpp
+# 의존성 라이브러리 소스 확인 (build/_deps/)
+cat build/_deps/*-src/src/*.cpp
 ```
-
-상상이나 추측으로 동작을 예측하지 말고, 실제 코드를 읽어서 확인한다.
-
-### 5. 검증 사이클
-
-```
-코드 수정 → clang-format / cmake-format → 빌드 → tmux 테스트 → 결과 확인
-```
-
-수정 후 반드시 포맷팅 → 빌드 → 실행 테스트까지 완료해야 한다. 화면 출력만 보고 "될 것이다"라고 추정하지 않는다.
-
-### 6. 회귀 테스트는 GTest + CTest로 작성한다
-
-**테스트 추가:**
-
-1. `tests/main_test.cpp`에 GTest 테스트를 추가한다.
-   ```cpp
-   #include <gtest/gtest.h>
-   #include "some_header.h"
-
-   TEST(ComponentName, BehaviorName) {
-     EXPECT_EQ(actual, expected);
-   }
-   ```
-
-2. 새 테스트 파일이 필요하면 `tests/CMakeLists.txt`에 `add_executable`을 추가하고 `add_test()`로 등록한다.
-
-**테스트 실행:**
-
-```bash
-# Configure & Build (BUILD_TESTING=ON 필수)
-cmake -B build -S . -DBUILD_TESTING=ON
-cmake --build build --target aipp_test
-
-# CTest 실행
-ctest --test-dir build -V
-
-# 특정 테스트만 실행
-./build/tests/aipp_test --gtest_filter='Sanity.*'
-```
-
-기본 빌드(`BUILD_TESTING=OFF`)에서는 GTest가 Fetch되지 않아 빌드 시간에 영향이 없다.
