@@ -34,8 +34,8 @@ class Resource {
   T& Get() { return *value_; }
   const T& Get() const { return *value_; }
 
-  explicit operator bool() const { return HasValue(); }
   bool HasValue() const { return value_.has_value(); }
+  explicit operator bool() const { return HasValue(); }
 
  private:
   std::optional<T> value_;
