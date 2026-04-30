@@ -38,7 +38,7 @@ if(BUILD_TESTING)
 
   enable_testing()
 
-  add_executable(aipp_test src/main_test.cc)
+  add_executable(aipp_test src/main_test.cc src/resource_test.cc)
   target_link_libraries(aipp_test PRIVATE GTest::gtest GTest::gtest_main)
   target_include_directories(aipp_test PRIVATE .)
   add_test(NAME aipp_test COMMAND aipp_test)
