@@ -27,5 +27,5 @@ FetchContent_MakeAvailable(ftxui)
 
 add_executable(aipp src/main.cpp)
 target_include_directories(aipp PRIVATE src)
-target_link_libraries(aipp PRIVATE CLI11::CLI11)
+target_link_libraries(aipp PRIVATE CLI11::CLI11 ftxui::component ftxui::screen)
 target_compile_definitions(aipp PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
