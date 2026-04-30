@@ -9,7 +9,7 @@ int main() {
 
   std::string input_content;
 
-  // 출력 영역 (로고 + 추후 AI 응답)
+  // 출력 영역 (로고 + AI 응답)
   auto output = ftxui::Renderer([] {
     return ftxui::vbox({
                ftxui::text("_______________"),
@@ -23,35 +23,54 @@ int main() {
            ftxui::flex;
   });
 
-  // 입력 영역
+  // 입력 영역 (border 없음, 최대 11줄)
   ftxui::InputOption input_opt;
   input_opt.multiline = true;
-  auto input = ftxui::Input(&input_content, input_opt) | ftxui::border;
+  auto input = ftxui::Input(&input_content, input_opt) |
+               ftxui::size(ftxui::HEIGHT, ftxui::GREATER_THAN, 1) |
+               ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 11);
 
-  auto container = ftxui::Container::Vertical({
-      output,
-      input,
+  // Footer
+  auto footer = ftxui::Renderer([] {
+    return ftxui::hbox({
+        ftxui::text(" aipp "),
+        ftxui::separator(),
+        ftxui::text(" AI++ "),
+        ftxui::filler(),
+        ftxui::text(" Enter: send | Shift+Enter: newline "),
+    });
   });
-  container->SetActiveChild(input);
 
-  // 전역 키 처리
-  container = ftxui::CatchEvent(container, [&](ftxui::Event event) {
+  // Container::Vertical 없이 직접 조합
+  auto view = ftxui::Renderer([&] {
+    return ftxui::vbox({
+        output->Render(),
+        ftxui::separator(),
+        input->Render(),
+        ftxui::separator(),
+        footer->Render(),
+    });
+  });
+
+  // 키 이벤트 처리
+  view = ftxui::CatchEvent(view, [&](ftxui::Event event) {
     if (event == ftxui::Event::Escape) {
-      return true;  // Esc: 향후 다른 용도로 사용 (종료하지 않음)
+      return true;
     }
     if (event == ftxui::Event::Return) {
       // TODO: input_content 전송 → AI
-      return true;  // Enter → 새 줄 없이 submit
-    }
-    // Shift+Enter → 새 줄 (터미널 CSI u: \x1B[27;2;13~)
-    if (event.input() == "\x1B[27;2;13~") {
-      input_content += '\n';
-      screen.PostEvent(ftxui::Event::End);  // 커서를 끝으로
       return true;
     }
-    return false;  // 그 외는 Input이 처리
+    if (event.input() == "\x1B[27;2;13~") {
+      input_content += '\n';
+      screen.PostEvent(ftxui::Event::End);
+      return true;
+    }
+    // 그 외 모든 키 (문자, Arrow, Backspace, Delete, Home, End 등)는 Input이
+    // 처리
+    return input->OnEvent(event);
   });
 
-  screen.Loop(container);
+  screen.Loop(view);
   return 0;
 }
