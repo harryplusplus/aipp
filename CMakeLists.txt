@@ -19,11 +19,7 @@ FetchContent_Declare(
   GIT_TAG v2.6.2)
 FetchContent_MakeAvailable(cli11)
 
-FetchContent_Declare(
-  ftxui
-  GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI
-  GIT_TAG v6.1.9)
-FetchContent_MakeAvailable(ftxui)
+add_subdirectory(external/FTXUI)
 
 include(CTest)
 

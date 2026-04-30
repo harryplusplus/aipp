@@ -1,3 +1,6 @@
 [submodule "external/styleguide"]
 	path = external/styleguide
 	url = https://github.com/google/styleguide.git
+[submodule "external/FTXUI"]
+	path = external/FTXUI
+	url = https://github.com/harryplusplus/FTXUI.git

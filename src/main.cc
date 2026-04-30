@@ -8,6 +8,7 @@ int main() {
   auto screen = ftxui::ScreenInteractive::Fullscreen();
 
   std::string input_content;
+  int cursor_line = 0;
 
   // 출력 영역 (로고 + AI 응답)
   auto output = ftxui::Renderer([] {
@@ -23,9 +24,15 @@ int main() {
            ftxui::flex;
   });
 
-  // 입력 영역 (border 없음, 최대 11줄)
+  // 입력 영역
   ftxui::InputOption input_opt;
   input_opt.multiline = true;
+  input_opt.on_change = [&] {
+    int lines = 1;
+    for (char c : input_content)
+      if (c == '\n') lines++;
+    cursor_line = lines - 1;
+  };
   auto input = ftxui::Input(&input_content, input_opt) |
                ftxui::size(ftxui::HEIGHT, ftxui::GREATER_THAN, 1) |
                ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 11);
@@ -41,18 +48,39 @@ int main() {
     });
   });
 
-  // Container::Vertical 없이 직접 조합
+  // 전체 뷰 (Container 없이 직접 조합)
   auto view = ftxui::Renderer([&] {
-    return ftxui::vbox({
-        output->Render(),
-        ftxui::separator(),
-        input->Render(),
-        ftxui::separator(),
-        footer->Render(),
-    });
+    int total = 1;
+    for (char c : input_content)
+      if (c == '\n') total++;
+
+    ftxui::Elements elems;
+    elems.push_back(output->Render());
+
+    elems.push_back(ftxui::separator());
+
+    // 스크롤 인디케이터 (위)
+    if (cursor_line > 0) {
+      elems.push_back(
+          ftxui::text("  \u2191 " + std::to_string(cursor_line) + " more "));
+    }
+
+    elems.push_back(input->Render());
+
+    // 스크롤 인디케이터 (아래)
+    int after = total - cursor_line - 1;
+    if (after > 0) {
+      elems.push_back(
+          ftxui::text("  \u2193 " + std::to_string(after) + " more "));
+    }
+
+    elems.push_back(ftxui::separator());
+    elems.push_back(footer->Render());
+
+    return ftxui::vbox(elems);
   });
 
-  // 키 이벤트 처리
+  // 키 이벤트
   view = ftxui::CatchEvent(view, [&](ftxui::Event event) {
     if (event == ftxui::Event::Escape) {
       return true;
@@ -66,8 +94,17 @@ int main() {
       screen.PostEvent(ftxui::Event::End);
       return true;
     }
-    // 그 외 모든 키 (문자, Arrow, Backspace, Delete, Home, End 등)는 Input이
-    // 처리
+    if (event == ftxui::Event::ArrowUp) {
+      if (cursor_line > 0) cursor_line--;
+      return input->OnEvent(event);
+    }
+    if (event == ftxui::Event::ArrowDown) {
+      int total = 1;
+      for (char c : input_content)
+        if (c == '\n') total++;
+      if (cursor_line + 1 < total) cursor_line++;
+      return input->OnEvent(event);
+    }
     return input->OnEvent(event);
   });
 
