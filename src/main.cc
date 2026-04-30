@@ -14,7 +14,7 @@
 // Logo displayed at the top of the log
 // -----------------------------------------------------------------------
 // clang-format off
-const char* kLogo[] = {
+const char* k_logo[] = {
     " ███  ███           ",
     "█   █  █    █    █  ",
     "█████  █  ████ ████ ",
@@ -187,10 +187,10 @@ int main() {
   getmaxyx(stdscr, rows, cols);
 
   // Create sub-windows
-  Resource log_win{newwin(rows - kInputHeight, cols, kLogTop, 0),
-                   [](WINDOW* w) noexcept { delwin(w); }};
-  Resource input_win{newwin(kInputHeight, cols, rows - kInputHeight, 0),
-                     [](WINDOW* w) noexcept { delwin(w); }};
+  WINDOW* log_win = newwin(rows - kInputHeight, cols, kLogTop, 0);
+  WINDOW* input_win = newwin(kInputHeight, cols, rows - kInputHeight, 0);
+  Defer del_log_win{[log_win]() noexcept { delwin(log_win); }};
+  Defer del_input_win{[input_win]() noexcept { delwin(input_win); }};
   scrollok(log_win, TRUE);
   keypad(input_win, TRUE);
 
@@ -198,7 +198,7 @@ int main() {
   Log log;
 
   // Logo
-  for (int i = 0; i < kLogoLines; ++i) log.Append(kLogo[i]);
+  for (int i = 0; i < kLogoLines; ++i) log.Append(k_logo[i]);
   log.Append("");
 
   bool running = true;

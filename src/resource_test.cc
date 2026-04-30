@@ -1,9 +1,9 @@
+#include "src/resource.h"
+
 #include <gtest/gtest.h>
 
 #include <memory>
 #include <utility>
-
-#include "src/resource.h"
 
 template <typename T, typename D, typename = void>
 struct ResourceValid : std::false_type {};
@@ -12,9 +12,8 @@ struct ResourceValid<T, D, std::void_t<decltype(sizeof(Resource<T, D>))>>
     : std::true_type {};
 
 static_assert(ResourceValid<int, void (*)(int&&)>::value);
-static_assert(
-    ResourceValid<std::unique_ptr<int>,
-                  void (*)(std::unique_ptr<int>&&)>::value);
+static_assert(ResourceValid<std::unique_ptr<int>,
+                            void (*)(std::unique_ptr<int>&&)>::value);
 static_assert(ResourceValid<int*, void (*)(int*&&)>::value);
 
 static_assert(!ResourceValid<int, void (*)(const int&)>::value);
@@ -39,11 +38,21 @@ struct MoveOnlyInt {
 
 struct DeleterLog {
   int* count;
-  void operator()(MoveOnlyInt&& obj) { obj.value = 0; *count += 1; }
+  void operator()(MoveOnlyInt&& obj) const {
+    obj.value = 0;
+    *count += 1;
+  }
 };
 
 struct DeleterTakesUniquePtr {
   void operator()(std::unique_ptr<int>&& p) { *p = 42; }
+};
+
+// T without default constructor and without operator bool —
+// impossible with the old std::exchange(other.value_, {}) design.
+struct FileDesc {
+  int fd;
+  explicit FileDesc(int f) : fd(f) {}
 };
 
 }  // namespace
@@ -51,7 +60,7 @@ struct DeleterTakesUniquePtr {
 TEST(ResourceTest, MoveConstruct) {
   int delete_count = 0;
   {
-    Resource<MoveOnlyInt, DeleterLog> r(MoveOnlyInt(7), DeleterLog{&delete_count});
+    Resource r(MoveOnlyInt(7), DeleterLog{&delete_count});
     EXPECT_TRUE(r);
     EXPECT_EQ(r.Get().value, 7);
   }
@@ -61,8 +70,8 @@ TEST(ResourceTest, MoveConstruct) {
 TEST(ResourceTest, MoveAssign) {
   int delete_count1 = 0, delete_count2 = 0;
   {
-    Resource<MoveOnlyInt, DeleterLog> r1(MoveOnlyInt(1), DeleterLog{&delete_count1});
-    Resource<MoveOnlyInt, DeleterLog> r2(MoveOnlyInt(2), DeleterLog{&delete_count2});
+    Resource r1(MoveOnlyInt(1), DeleterLog{&delete_count1});
+    Resource r2(MoveOnlyInt(2), DeleterLog{&delete_count2});
     r1 = std::move(r2);
     EXPECT_EQ(delete_count1, 1);
     EXPECT_EQ(delete_count2, 0);
@@ -79,11 +88,11 @@ TEST(ResourceTest, MoveOnlyType) {
 
 TEST(ResourceTest, BoolConversion) {
   int delete_count = 0;
-  Resource<MoveOnlyInt, DeleterLog> r(MoveOnlyInt(5), DeleterLog{&delete_count});
-  EXPECT_TRUE(static_cast<bool>(r));
+  Resource r(MoveOnlyInt(5), DeleterLog{&delete_count});
+  EXPECT_TRUE(r.HasValue());
 
   auto empty = std::move(r);
-  EXPECT_FALSE(static_cast<bool>(r));
+  EXPECT_FALSE(r.HasValue());  // NOLINT: intentional — check moved-from state
 }
 
 TEST(ResourceTest, EmptyStateAfterMove) {
@@ -92,8 +101,20 @@ TEST(ResourceTest, EmptyStateAfterMove) {
     Resource<MoveOnlyInt, DeleterLog> r1(MoveOnlyInt(1), DeleterLog{&del1});
     Resource<MoveOnlyInt, DeleterLog> r2(MoveOnlyInt(2), DeleterLog{&del2});
     r2 = std::move(r1);
-    EXPECT_FALSE(static_cast<bool>(r1));
+    EXPECT_FALSE(
+        r1.HasValue());  // NOLINT: intentional — check moved-from state
   }
   EXPECT_EQ(del1, 1);
   EXPECT_EQ(del2, 1);
+}
+
+TEST(ResourceTest, NonDefaultConstructible) {
+  bool deleted = false;
+  {
+    auto del = [&](FileDesc&& /*f*/) { deleted = true; };
+    Resource r(FileDesc{42}, std::move(del));
+    EXPECT_TRUE(r);
+    EXPECT_EQ(r.Get().fd, 42);
+  }
+  EXPECT_TRUE(deleted);
 }
