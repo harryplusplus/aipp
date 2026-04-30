@@ -21,6 +21,12 @@
 - **Google C++ 스타일 가이드**(`external/styleguide/cppguide.html`)를 준수한다.
 - **한국어를 포함한 모든 UTF-8 입력을 지원한다.** FTXUI가 UTF-8을 정상 처리하므로, IME 입력이 안 된다면 터미널/환경 문제로 간주하고 이슈로 남긴다.
 
+### rg 사용 규칙
+
+`rg`는 Rust 정규식을 사용한다. **`|`는 OR 연산자이므로 escape하면 안 된다.** literal `|`를 찾으려면 `[|]`를 쓴다.
+- `rg "foo|bar"` → `foo` 또는 `bar` 검색
+- `rg "foo[|]bar"` → `foo|bar` 문자열 검색
+
 ---
 
 ## C++ 파일 작업 후
